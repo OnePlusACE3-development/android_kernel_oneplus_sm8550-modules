@@ -9345,6 +9345,7 @@ int dsi_display_pre_disable(struct dsi_display *display)
 
 		if (display->config.panel_mode == DSI_OP_VIDEO_MODE)
 			dsi_panel_switch_video_mode_out(display->panel);
+
 	} else {
 		rc = dsi_panel_pre_disable(display->panel);
 		if (rc)

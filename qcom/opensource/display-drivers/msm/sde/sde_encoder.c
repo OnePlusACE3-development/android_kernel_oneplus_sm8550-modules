@@ -5098,9 +5098,9 @@ int oplus_sync_panel_brightness(enum oplus_sync_method method, struct drm_encode
 			usleep_range(delay, delay + 100);
 		}
 
-		if ((ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % us_per_frame) > (us_per_frame - DEBOUNCE_TIME)) {
-			SDE_EVT32(us_per_frame, last_te_timestamp);
-			usleep_range(DEBOUNCE_TIME + vsync_width, DEBOUNCE_TIME + 100 + vsync_width);
+		if ((ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % display->panel->last_us_per_frame) > (display->panel->last_us_per_frame - DEBOUNCE_TIME)) {
+			SDE_EVT32(display->panel->last_us_per_frame, last_te_timestamp);
+			usleep_range(DEBOUNCE_TIME + display->panel->last_vsync_width, DEBOUNCE_TIME + 100 + display->panel->last_vsync_width);
 		}
 		if (method == OPLUS_PREPARE_KICKOFF_METHOD) {
 			rc = oplus_setbacklight_by_display_type(drm_enc);
@@ -5189,7 +5189,6 @@ int oplus_sync_panel_brightness_v2(struct drm_encoder *drm_enc)
 	us_per_frame = get_current_vsync_period(sde_enc->cur_master->connector);
 	vsync_width = get_current_vsync_width(sde_enc->cur_master->connector);
 	refresh_rate = get_current_refresh_rate(sde_enc->cur_master->connector);
-
 	te_timestamp = list_last_entry(&cmd_enc->te_timestamp_list, struct sde_encoder_phys_cmd_te_timestamp, list);
 	if (display->panel->last_us_per_frame == 0 || display->panel->last_vsync_width == 0) {
 		display->panel->last_us_per_frame = us_per_frame;
@@ -5205,15 +5204,27 @@ int oplus_sync_panel_brightness_v2(struct drm_encoder *drm_enc)
 			display->panel->work_frame = 0;	// one frame work
 		}
 	}
-
+	
 	if (te_timestamp == NULL) {
 		return rc;
 	}
-
+	
 	last_te_timestamp = te_timestamp->timestamp;
 	sync_backlight = c_conn->bl_need_sync;
 	display->panel->oplus_priv.need_sync = sync_backlight;
 	c_conn->bl_need_sync = false;
+	
+	//in debounce time, update last_vsync_width from next frame
+	if (((last_te_timestamp > display->panel->ts_timestamp && display->panel->work_frame == 1) || display->panel->work_frame == 0) &&
+		(ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % display->panel->last_us_per_frame) > (display->panel->last_us_per_frame - DEBOUNCE_TIME)) {
+		display->panel->last_vsync_width = vsync_width;
+	}
+	//updates the last_us_per_frame & last_vsync_width after timing switch
+	if ((last_te_timestamp - display->panel->ts_timestamp) >= display->panel->work_frame * display->panel->last_us_per_frame * 1000) {
+		display->panel->last_us_per_frame = us_per_frame;
+		display->panel->last_vsync_width = vsync_width;
+		display->panel->last_refresh_rate = refresh_rate;
+	}
 
 	//in debounce time, update last_vsync_width from next frame
 	if (((last_te_timestamp > display->panel->ts_timestamp && display->panel->work_frame == 1) || display->panel->work_frame == 0) &&
@@ -5237,6 +5248,11 @@ int oplus_sync_panel_brightness_v2(struct drm_encoder *drm_enc)
 			SDE_EVT32(display->panel->last_us_per_frame, last_te_timestamp, delay);
 			usleep_range(delay, delay + 100);
 		}
+		if ((ktime_to_us(ktime_sub(ktime_get(), last_te_timestamp)) % display->panel->last_us_per_frame) > (display->panel->last_us_per_frame - DEBOUNCE_TIME)) {
+			SDE_EVT32(display->panel->last_us_per_frame, last_te_timestamp);
+			usleep_range(DEBOUNCE_TIME + display->panel->last_vsync_width, DEBOUNCE_TIME + 100 + display->panel->last_vsync_width);
+		}
+
 		snprintf(tag_name, sizeof(tag_name), "%s: %d", display->display_type, brightness);
 		SDE_ATRACE_BEGIN(tag_name);
 		rc = oplus_set_brightness(c_conn->bl_device, brightness);

@@ -2113,6 +2113,16 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
+	DSI_INFO("DisplayDriverID@@426$$Switching ffc mode, clk:[%d -> %d]",
+			display->cached_clk_rate,
+			display->dyn_bit_clk);
+
+	if (display->cached_clk_rate == display->dyn_bit_clk) {
+		DSI_WARN("DisplayDriverID@@427$$Ignore duplicated clk ffc setting, clk=%d",
+				display->dyn_bit_clk);
+		return rc;
+	}
+
 	mutex_lock(&panel->oplus_ffc_lock);
 
 	clk_osc_pending.clk_rate = display->dyn_bit_clk;
@@ -2121,6 +2131,10 @@ int oplus_display_update_clk_ffc(struct dsi_display *display,
 	rc = oplus_panel_check_ffc_config(panel, &clk_osc_pending);
 	if (!rc) {
 		panel->oplus_priv.ffc_delay_frames = FFC_DELAY_MAX_FRAMES;
+	} else {
+		DSI_ERR("DisplayDriverID@@427$$Failed to find ffc mode index, clk=%d, osc=%d",
+				clk_osc_pending.clk_rate,
+				clk_osc_pending.osc_rate);
 	}
 
 	mutex_unlock(&panel->oplus_ffc_lock);
@@ -2135,11 +2149,26 @@ int oplus_display_update_osc_ffc(struct dsi_display *display,
 	struct dsi_panel *panel = display->panel;
 	struct oplus_clk_osc clk_osc_pending;
 
+	DSI_INFO("DisplayDriverID@@428$$Switching ffc mode, osc:[%d -> %d]",
+			panel->oplus_priv.osc_rate_cur,
+			osc_rate);
+
+	if (osc_rate == panel->oplus_priv.osc_rate_cur) {
+		DSI_WARN("DisplayDriverID@@429$$Ignore duplicated osc ffc setting, osc=%d",
+				panel->oplus_priv.osc_rate_cur);
+		return rc;
+	}
+
 	mutex_lock(&panel->oplus_ffc_lock);
 
 	clk_osc_pending.clk_rate = panel->oplus_priv.clk_rate_cur;
 	clk_osc_pending.osc_rate = osc_rate;
 	rc = oplus_panel_check_ffc_config(panel, &clk_osc_pending);
+	if (rc) {
+		DSI_ERR("DisplayDriverID@@429$$Failed to find ffc mode index, clk=%d, osc=%d",
+				clk_osc_pending.clk_rate,
+				clk_osc_pending.osc_rate);
+	}
 
 	mutex_unlock(&panel->oplus_ffc_lock);
 
@@ -2625,6 +2654,11 @@ int oplus_sde_early_wakeup(struct dsi_panel *panel)
 		DSI_ERR("invalid display params\n");
 		return -EINVAL;
 	}
+	/* when SDE_MODE_DPMS_OFF, wake up SDE_ENC_RC may case _sde_encoder_rc_stop error */
+	if (d_display->panel->power_mode == SDE_MODE_DPMS_OFF) {
+		OFP_INFO("[%s]:panel power off\n", __func__);
+		return -EFAULT;
+	}
 	drm_enc = d_display->bridge->base.encoder;
 	if (!drm_enc) {
 		DSI_ERR("invalid encoder params\n");
@@ -2646,7 +2680,7 @@ int oplus_wait_for_vsync(struct dsi_panel *panel)
 		return -ENODEV;
 	}
 
-	if (panel->power_mode != SDE_MODE_DPMS_ON || !panel->panel_initialized) {
+	if (panel->power_mode == SDE_MODE_DPMS_OFF || !panel->panel_initialized) {
 		LCD_WARN("display panel in off status\n");
 		return -ENODEV;
 	}
@@ -2762,7 +2796,7 @@ void oplus_panel_switch_to_sync_te(struct dsi_panel *panel)
 		}
 	} else if (vsync_cost > vsync_width) {
 		frame_end = us_per_frame - vsync_cost;
-		if ((0 <= frame_end) && (frame_end < debounce_time)) {
+		if (frame_end < debounce_time) {
 			if (panel->last_refresh_rate == 60) {
 				usleep_range(9 * 1000, (9 * 1000) + 100);
 			} else if (panel->last_refresh_rate == 120) {

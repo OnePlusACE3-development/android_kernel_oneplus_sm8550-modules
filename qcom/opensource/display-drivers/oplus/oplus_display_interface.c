@@ -248,24 +248,22 @@ int oplus_panel_cmd_switch(struct dsi_panel *panel, enum dsi_cmd_set_type *type)
 	return 0;
 }
 
-void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, const struct mipi_dsi_msg *msg)
+void oplus_ctrl_print_cmd_desc(struct dsi_ctrl *dsi_ctrl, struct dsi_cmd_desc *cmd)
 {
 	char buf[512];
 	int len = 0;
 	size_t i;
+	const struct mipi_dsi_msg *msg = &cmd->msg;
 	char *tx_buf = (char*)msg->tx_buf;
 
 	memset(buf, 0, sizeof(buf));
 
 	/* Packet Info */
 	len += snprintf(buf, sizeof(buf) - len,  "%02X ", msg->type);
-	/* Last bit */
-	/* len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (msg->flags & MIPI_DSI_MSG_LASTCOMMAND) ? 1 : 0); */
-	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (msg->flags) ? 1 : 0);
+	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", 0x00);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", msg->channel);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", (unsigned int)msg->flags);
-	/* Delay */
-	/* len += snprintf(buf + len, sizeof(buf) - len, "%02X ", msg->wait_ms); */
+	len += snprintf(buf + len, sizeof(buf) - len, "%02X ", cmd->post_wait_ms);
 	len += snprintf(buf + len, sizeof(buf) - len, "%02X %02X ", msg->tx_len >> 8, msg->tx_len & 0x00FF);
 
 	/* Packet Payload */
@@ -977,8 +975,10 @@ int oplus_panel_pwm_switch_cmdq_delay_handle(void *dsi_panel, enum dsi_cmd_set_t
 			oplus_sde_early_wakeup(panel);
 			oplus_wait_for_vsync(panel);
 		}
-		if (panel->cur_mode->timing.refresh_rate == 60) {
+		if (panel->cur_mode->timing.refresh_rate == 60 || panel->cur_mode->timing.refresh_rate == 90) {
 			oplus_need_to_sync_te(panel);
+		} else if (panel->cur_mode->timing.refresh_rate == 120) {
+			usleep_range(1000, 1020);
 		}
 	}
 
@@ -1015,8 +1015,10 @@ int oplus_panel_cmdq_pack_handle(void *dsi_panel, enum dsi_cmd_set_type type, bo
 					cmd_set_prop_map[type]);
 			oplus_sde_early_wakeup(panel);
 			oplus_wait_for_vsync(panel);
-			if (panel->cur_mode->timing.refresh_rate == 60) {
+			if (panel->cur_mode->timing.refresh_rate == 60 || panel->cur_mode->timing.refresh_rate == 90) {
 				oplus_need_to_sync_te(panel);
+			} else if (panel->cur_mode->timing.refresh_rate == 120) {
+				usleep_range(1000, 1020);
 			}
 		}
 	} else {

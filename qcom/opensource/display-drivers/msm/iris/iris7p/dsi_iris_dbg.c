@@ -26,6 +26,8 @@ int iris_debug_display_mode_get_i7p(char *kbuf, int size, bool debug)
 
 	len += snprintf(kbuf, size,
 			"%-20s:\t%s\n", "Display mode", pcfg->display_mode_name);
+			
+	len += iris_get_sr_info(kbuf + len, size - len, 1);
 
 	len += iris_get_sr_info(kbuf + len, size - len, 1);
 

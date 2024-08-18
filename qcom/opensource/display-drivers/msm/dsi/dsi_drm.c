@@ -362,6 +362,7 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 		SDE_ATRACE_END("dsi_bridge_post_disable");
 		return;
 	}
+
 	SDE_ATRACE_END("dsi_bridge_post_disable");
 }
 

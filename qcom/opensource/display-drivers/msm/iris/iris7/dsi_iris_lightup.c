@@ -28,7 +28,6 @@
 #include "dsi_iris_dts_fw.h"
 #include "dsi_iris_emv_i7.h"
 
-
 int iris_dbgfs_status_init(struct dsi_display *display);
 
 void iris_init_i7(struct dsi_display *display, struct dsi_panel *panel)
